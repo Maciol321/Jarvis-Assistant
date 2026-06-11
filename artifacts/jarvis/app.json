@@ -6,17 +6,29 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "jarvis",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000913"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "JARVIS uses the microphone for voice commands",
+        "NSCameraUsageDescription": "JARVIS uses the camera for visual analysis",
+        "NSLocationWhenInUseUsageDescription": "JARVIS uses location for weather and map data"
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -28,11 +40,23 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "JARVIS potrzebuje kamery do analizy wizualnej"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "JARVIS potrzebuje lokalizacji do pogody i mapy",
+          "locationWhenInUsePermission": "JARVIS potrzebuje lokalizacji do pogody i mapy"
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }

@@ -14,16 +14,22 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { JarvisProvider } from "@/contexts/JarvisContext";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
+    <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="weather" options={{ headerShown: false }} />
+      <Stack.Screen name="news" options={{ headerShown: false }} />
+      <Stack.Screen name="sports" options={{ headerShown: false }} />
+      <Stack.Screen name="transport" options={{ headerShown: false }} />
+      <Stack.Screen name="map" options={{ headerShown: false }} />
+      <Stack.Screen name="camera" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -48,11 +54,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <JarvisProvider>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000913" }}>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </JarvisProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

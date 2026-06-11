@@ -1,0 +1,3 @@
+- [Expo react-native-maps web split](expo-maps-web-split.md) — react-native-maps must use .native.tsx/.web.tsx platform split to avoid web bundling errors
+- [Expo Animated useNativeDriver web](expo-animated-web.md) — useNativeDriver must be Platform.OS !== 'web'; web doesn't support native driver
+- [Expo SDK 54 package versions](expo-sdk54-versions.md) — correct package versions for Expo SDK 54 (14.x/15.x series, not 16.x)
