@@ -112,6 +112,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
+      setCurrentResponse("");
       setStatus("speaking");
 
       try {

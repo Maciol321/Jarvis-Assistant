@@ -30,6 +30,7 @@ function RootLayoutNav() {
       <Stack.Screen name="transport" options={{ headerShown: false }} />
       <Stack.Screen name="map" options={{ headerShown: false }} />
       <Stack.Screen name="camera" options={{ headerShown: false }} />
+      <Stack.Screen name="history" options={{ headerShown: false }} />
     </Stack>
   );
 }

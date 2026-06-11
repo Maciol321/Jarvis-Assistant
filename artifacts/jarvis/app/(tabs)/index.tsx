@@ -27,6 +27,17 @@ const { width: W, height: H } = Dimensions.get("window");
 
 const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
 
+const haptic = (type: "light" | "medium" | "success") => {
+  if (Platform.OS === "web") return;
+  if (type === "success") {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  } else {
+    Haptics.impactAsync(
+      type === "medium" ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light,
+    ).catch(() => {});
+  }
+};
+
 type QuickAction = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -85,7 +96,6 @@ export default function HomeScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const micPulse = useRef(new Animated.Value(1)).current;
-  const statusFade = useRef(new Animated.Value(1)).current;
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const scrollRef = useRef<ScrollView>(null);
@@ -99,8 +109,8 @@ export default function HomeScreen() {
     if (status === "listening") {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(micPulse, { toValue: 1.3, duration: 600, useNativeDriver: true }),
-          Animated.timing(micPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+          Animated.timing(micPulse, { toValue: 1.3, duration: 600, useNativeDriver: false }),
+          Animated.timing(micPulse, { toValue: 1, duration: 600, useNativeDriver: false }),
         ]),
       ).start();
     } else {
@@ -119,6 +129,7 @@ export default function HomeScreen() {
   }, [ttsReady, ttsAudioBase64]);
 
   const playTts = async (b64: string) => {
+    if (Platform.OS === "web") { clearTts(); return; }
     try {
       await soundRef.current?.unloadAsync();
       const path = `${FileSystem.documentDirectory}jarvis_tts.mp3`;
@@ -136,7 +147,7 @@ export default function HomeScreen() {
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || status === "processing") return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptic("medium");
     const text = inputText;
     setInputText("");
     await sendMessage(text);
@@ -151,7 +162,7 @@ export default function HomeScreen() {
         recordingRef.current = null;
 
         if (uri) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          haptic("success");
           const b64 = await FileSystem.readAsStringAsync(uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
@@ -179,7 +190,7 @@ export default function HomeScreen() {
         await rec.startAsync();
         recordingRef.current = rec;
         setIsRecording(true);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        haptic("light");
       } catch {
         /* permission denied */
       }
@@ -193,16 +204,16 @@ export default function HomeScreen() {
     hour12: false,
   });
   const dateStr = currentTime.toLocaleDateString("pl-PL", {
-    weekday: "long",
+    weekday: "short",
     day: "numeric",
-    month: "long",
+    month: "short",
     year: "numeric",
   }).toUpperCase();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const bottomPad = Platform.OS === "web" ? 16 : insets.bottom;
 
-  const lastMessages = messages.slice(-6);
+  const lastMessages = messages.slice(-8);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -213,7 +224,7 @@ export default function HomeScreen() {
           <Text style={[styles.jarvisTitle, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
             JARVIS
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.subtitle, { color: "#7ab8d4", fontFamily: "Inter_400Regular" }]}>
             AI ASSISTANT · SYSTEM ONLINE
           </Text>
         </View>
@@ -221,7 +232,7 @@ export default function HomeScreen() {
           <Text style={[styles.clock, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
             {timeStr}
           </Text>
-          <Text style={[styles.date, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.date, { color: "#a0d0e8", fontFamily: "Inter_400Regular" }]}>
             {dateStr}
           </Text>
         </View>
@@ -232,6 +243,19 @@ export default function HomeScreen() {
         <Text style={[styles.statusText, { color: STATUS_COLORS[status], fontFamily: "Inter_600SemiBold" }]}>
           {STATUS_LABELS[status] ?? "GOTOWY"}
         </Text>
+        <View style={{ flex: 1 }} />
+        {messages.length > 0 && (
+          <Pressable
+            onPress={() => router.push("/history")}
+            hitSlop={10}
+            style={styles.historyBtn}
+          >
+            <Ionicons name="time-outline" size={16} color="#3a7a9c" />
+            <Text style={[styles.historyLabel, { fontFamily: "Inter_400Regular" }]}>
+              Historia ({messages.length})
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.orbContainer}>
@@ -240,7 +264,7 @@ export default function HomeScreen() {
           <Text style={[styles.orbText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
             JARVIS
           </Text>
-          <Text style={[styles.orbSub, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.orbSub, { color: "#7ab8d4", fontFamily: "Inter_400Regular" }]}>
             v2.0
           </Text>
         </View>
@@ -253,8 +277,8 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingVertical: 4 }}
           showsVerticalScrollIndicator={false}
         >
-          {lastMessages.length === 0 ? (
-            <Text style={[styles.responseEmpty, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
+          {lastMessages.length === 0 && !currentResponse ? (
+            <Text style={[styles.responseEmpty, { color: "#7ab8d4", fontFamily: "Inter_400Regular" }]}>
               Powiedz coś lub napisz pytanie...
             </Text>
           ) : (
@@ -266,7 +290,7 @@ export default function HomeScreen() {
                 <Text style={[
                   styles.msgText,
                   {
-                    color: msg.role === "user" ? colors.text : colors.primary,
+                    color: msg.role === "user" ? "#c8e8f5" : colors.primary,
                     fontFamily: msg.role === "user" ? "Inter_400Regular" : "Inter_500Medium",
                   },
                 ]}>
@@ -275,11 +299,11 @@ export default function HomeScreen() {
               </View>
             ))
           )}
-          {currentResponse && status === "processing" ? (
+          {currentResponse ? (
             <View style={styles.msgAssistant}>
               <Text style={[styles.msgText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
                 {currentResponse}
-                <Text style={{ opacity: 0.6 }}>▌</Text>
+                {status === "processing" && <Text style={{ opacity: 0.6 }}>▌</Text>}
               </Text>
             </View>
           ) : null}
@@ -299,7 +323,7 @@ export default function HomeScreen() {
               },
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              haptic("light");
               router.push(action.route);
             }}
           >
@@ -322,12 +346,12 @@ export default function HomeScreen() {
               {
                 backgroundColor: colors.card,
                 color: colors.text,
-                borderColor: colors.border,
+                borderColor: status === "processing" ? colors.primary : colors.border,
                 fontFamily: "Inter_400Regular",
               },
             ]}
             placeholder="Zapytaj Jarvisa..."
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor="#5a8aa0"
             value={inputText}
             onChangeText={setInputText}
             onSubmitEditing={handleSend}
@@ -339,13 +363,15 @@ export default function HomeScreen() {
             style={({ pressed }) => [
               styles.sendBtn,
               {
-                backgroundColor: colors.primary,
-                opacity: pressed || !inputText.trim() ? 0.5 : 1,
+                backgroundColor: inputText.trim() ? colors.primary : "#0a2535",
+                borderWidth: 1,
+                borderColor: inputText.trim() ? colors.primary : colors.border,
+                opacity: pressed ? 0.7 : 1,
               },
             ]}
             disabled={!inputText.trim() || status === "processing"}
           >
-            <Ionicons name="arrow-up" size={20} color="#000913" />
+            <Ionicons name="arrow-up" size={20} color={inputText.trim() ? "#000913" : "#3a7a9c"} />
           </Pressable>
           <Animated.View style={{ transform: [{ scale: micPulse }] }}>
             <Pressable
@@ -353,8 +379,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 styles.micBtn,
                 {
-                  backgroundColor: isRecording ? colors.hudRed : colors.card,
-                  borderColor: isRecording ? colors.hudRed : colors.border,
+                  backgroundColor: isRecording ? "#cc2200" : colors.card,
+                  borderColor: isRecording ? "#ff3300" : colors.border,
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}
@@ -381,14 +407,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   jarvisTitle: {
     fontSize: 22,
     letterSpacing: 6,
   },
   subtitle: {
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -396,13 +422,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   clock: {
-    fontSize: 20,
+    fontSize: 22,
     letterSpacing: 2,
   },
   date: {
-    fontSize: 8,
+    fontSize: 10,
     letterSpacing: 1,
-    marginTop: 2,
+    marginTop: 3,
   },
   statusRow: {
     flexDirection: "row",
@@ -412,12 +438,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 2,
   },
   orbContainer: {
@@ -435,7 +461,7 @@ const styles = StyleSheet.create({
     letterSpacing: 6,
   },
   orbSub: {
-    fontSize: 9,
+    fontSize: 10,
     letterSpacing: 2,
     marginTop: 2,
   },
@@ -443,13 +469,13 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 16,
     marginBottom: 4,
-    maxHeight: 120,
+    maxHeight: 130,
   },
   responseScroll: {
     flex: 1,
   },
   responseEmpty: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
     letterSpacing: 0.5,
     paddingVertical: 8,
@@ -461,15 +487,15 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   msgAssistant: {
-    paddingLeft: 4,
+    paddingLeft: 8,
     borderLeftWidth: 2,
     borderLeftColor: "#00d4ff",
     paddingBottom: 2,
     marginBottom: 6,
   },
   msgText: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 19,
   },
   quickActions: {
     flexDirection: "row",
@@ -489,7 +515,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   actionLabel: {
-    fontSize: 8,
+    fontSize: 9,
     letterSpacing: 0.5,
   },
   inputRow: {
@@ -504,7 +530,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 22,
-    borderWidth: 0.5,
+    borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 14,
   },
@@ -522,5 +548,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+  },
+  historyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    borderColor: "#1a4060",
+  },
+  historyLabel: {
+    fontSize: 10,
+    color: "#3a7a9c",
+    letterSpacing: 0.5,
   },
 });
