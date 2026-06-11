@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "yVmpeiY9oABQeYsIUpcHp"
+uri = "file://artifacts/jarvis/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "AGzmKQuQHEW1CmAeQJVdZ"
+uri = "file://artifacts/jarvis/assets/images/splash.png"
+type = "image"
+title = "generated_image"
