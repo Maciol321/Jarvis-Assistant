@@ -501,6 +501,20 @@ export default function TransportScreen() {
                 <Text style={[styles.emptyText, { color: colors.textMuted, fontFamily: "Inter_400Regular" }]}>
                   Wpisz stację początkową i docelową{"\n"}aby zobaczyć rozkład PKP
                 </Text>
+                <View style={[styles.aiNote, { borderColor: "#ff8c0044", backgroundColor: "#ff8c0011" }]}>
+                  <Ionicons name="sparkles-outline" size={12} color="#ff8c00" />
+                  <Text style={[styles.aiNoteText, { color: "#ff8c00", fontFamily: "Inter_400Regular" }]}>
+                    Rozkład generowany przez AI na podstawie danych PKP
+                  </Text>
+                </View>
+              </View>
+            )}
+            {searched && connections.length > 0 && (
+              <View style={[styles.aiNote, { borderColor: "#ff8c0044", backgroundColor: "#ff8c0011", marginBottom: 8 }]}>
+                <Ionicons name="sparkles-outline" size={12} color="#ff8c00" />
+                <Text style={[styles.aiNoteText, { color: "#ff8c00", fontFamily: "Inter_400Regular" }]}>
+                  Rozkład AI (szacunkowy) · potwierdź na portalpasazera.pl
+                </Text>
               </View>
             )}
             {error && (
@@ -647,6 +661,16 @@ const styles = StyleSheet.create({
   results: { flex: 1 },
   emptyState: { alignItems: "center", justifyContent: "center", paddingTop: 40, gap: 12 },
   emptyText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  aiNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 0.5,
+  },
+  aiNoteText: { fontSize: 11, flex: 1, lineHeight: 16 },
   infoBar: {
     flexDirection: "row",
     alignItems: "center",
