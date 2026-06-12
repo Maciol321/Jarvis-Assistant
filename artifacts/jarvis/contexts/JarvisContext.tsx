@@ -31,11 +31,28 @@ type JarvisContextType = {
   ttsReady: boolean;
   clearTts: () => void;
   stopSpeaking: () => void;
+  setListening: (val: boolean) => void;
 };
 
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
 const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+
+function pickMaleVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+
+  return (
+    voices.find((v) => /marek/i.test(v.name)) ||
+    voices.find((v) => /microsoft.*david/i.test(v.name)) ||
+    voices.find((v) => /google.*uk.*male/i.test(v.name)) ||
+    voices.find((v) => /male/i.test(v.name)) ||
+    voices.find((v) => v.lang.startsWith("pl")) ||
+    voices.find((v) => v.lang.startsWith("en")) ||
+    voices[0]
+  );
+}
 
 function speakWeb(text: string, onEnd: () => void): () => void {
   if (typeof window === "undefined" || !window.speechSynthesis) {
@@ -45,39 +62,28 @@ function speakWeb(text: string, onEnd: () => void): () => void {
 
   window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "pl-PL";
-  utterance.rate = 0.92;
-  utterance.pitch = 0.75;
-  utterance.volume = 1;
+  const doSpeak = () => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "pl-PL";
+    utterance.rate = 0.88;
+    utterance.pitch = 0.45;
+    utterance.volume = 1;
 
-  const setVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    const plVoice =
-      voices.find((v) => v.lang.startsWith("pl") && v.localService) ||
-      voices.find((v) => v.lang.startsWith("pl")) ||
-      voices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("male")) ||
-      voices[0];
-    if (plVoice) utterance.voice = plVoice;
+    const voice = pickMaleVoice();
+    if (voice) utterance.voice = voice;
+
+    utterance.onend = () => onEnd();
+    utterance.onerror = () => onEnd();
+    window.speechSynthesis.speak(utterance);
   };
-
-  setVoice();
-
-  utterance.onend = () => onEnd();
-  utterance.onerror = () => onEnd();
 
   if (window.speechSynthesis.getVoices().length === 0) {
-    window.speechSynthesis.onvoiceschanged = () => {
-      setVoice();
-      window.speechSynthesis.speak(utterance);
-    };
+    window.speechSynthesis.onvoiceschanged = () => doSpeak();
   } else {
-    window.speechSynthesis.speak(utterance);
+    doSpeak();
   }
 
-  return () => {
-    window.speechSynthesis.cancel();
-  };
+  return () => window.speechSynthesis.cancel();
 }
 
 export function JarvisProvider({ children }: { children: React.ReactNode }) {
@@ -88,6 +94,10 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [ttsReady, setTtsReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
+
+  const setListening = useCallback((val: boolean) => {
+    setStatus(val ? "listening" : "standby");
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     stopSpeakRef.current?.();
@@ -253,6 +263,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         ttsReady,
         clearTts,
         stopSpeaking,
+        setListening,
       }}
     >
       {children}
