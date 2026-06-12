@@ -68,6 +68,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     abortRef.current = new AbortController();
 
     let fullResponse = "";
+    let streamError = "";
 
     try {
       const res = await fetch(`${baseUrl}/api/jarvis/chat`, {
@@ -81,7 +82,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       if (!reader) throw new Error("No reader");
       const decoder = new TextDecoder();
 
-      while (true) {
+      outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value);
@@ -98,11 +99,28 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
               fullResponse += data.content;
               setCurrentResponse(fullResponse);
             }
-            if (data.done || data.error) break;
+            if (data.error) {
+              streamError = data.error;
+              break outer;
+            }
+            if (data.done) break outer;
           } catch {
             /* skip */
           }
         }
+      }
+
+      if (streamError) {
+        const errMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: streamError,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+        setCurrentResponse("");
+        setStatus("standby");
+        return;
       }
 
       const assistantMsg: Message = {
@@ -134,7 +152,14 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus("standby");
-        setCurrentResponse("Błąd połączenia z systemem JARVIS.");
+        const errMsg: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Błąd połączenia z systemem JARVIS. Sprawdź połączenie internetowe.",
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+        setCurrentResponse("");
       }
     }
   }, [messages]);

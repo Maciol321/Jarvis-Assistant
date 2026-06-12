@@ -39,7 +39,12 @@ router.post("/chat", async (req, res) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Błąd AI";
+    const raw = err instanceof Error ? err.message : "Błąd AI";
+    const msg = raw.includes("429")
+      ? "Klucz API OpenAI nie ma dostępnych kredytów. Doładuj konto na platform.openai.com/billing i spróbuj ponownie."
+      : raw.includes("401") || raw.includes("Incorrect API key")
+      ? "Klucz API OpenAI jest nieprawidłowy. Sprawdź klucz w ustawieniach środowiska."
+      : raw;
     res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
     res.end();
   }
