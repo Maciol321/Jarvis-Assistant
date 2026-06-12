@@ -89,7 +89,7 @@ export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { status, currentResponse, sendMessage, messages, ttsAudioBase64, ttsReady, clearTts } = useJarvis();
+  const { status, currentResponse, sendMessage, messages, ttsAudioBase64, ttsReady, clearTts, stopSpeaking } = useJarvis();
 
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -258,17 +258,17 @@ export default function HomeScreen() {
         )}
       </View>
 
-      <View style={styles.orbContainer}>
+      <Pressable style={styles.orbContainer} onPress={status === "speaking" ? stopSpeaking : undefined}>
         <HUDRing size={W * 0.72} active={status !== "standby"} showOrb />
         <View style={styles.orbCenter} pointerEvents="none">
           <Text style={[styles.orbText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
             JARVIS
           </Text>
           <Text style={[styles.orbSub, { color: "#7ab8d4", fontFamily: "Inter_400Regular" }]}>
-            v2.0
+            {status === "speaking" ? "DOTKNIJ ABY STOP" : "v2.0"}
           </Text>
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.responseContainer}>
         <ScrollView

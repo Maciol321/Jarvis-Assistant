@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { fetch } from "expo/fetch";
+import { Platform } from "react-native";
 
 export type Message = {
   id: string;
@@ -29,11 +30,55 @@ type JarvisContextType = {
   ttsAudioBase64: string | null;
   ttsReady: boolean;
   clearTts: () => void;
+  stopSpeaking: () => void;
 };
 
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
 const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+
+function speakWeb(text: string, onEnd: () => void): () => void {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    onEnd();
+    return () => {};
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "pl-PL";
+  utterance.rate = 0.92;
+  utterance.pitch = 0.75;
+  utterance.volume = 1;
+
+  const setVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const plVoice =
+      voices.find((v) => v.lang.startsWith("pl") && v.localService) ||
+      voices.find((v) => v.lang.startsWith("pl")) ||
+      voices.find((v) => v.lang.startsWith("en") && v.name.toLowerCase().includes("male")) ||
+      voices[0];
+    if (plVoice) utterance.voice = plVoice;
+  };
+
+  setVoice();
+
+  utterance.onend = () => onEnd();
+  utterance.onerror = () => onEnd();
+
+  if (window.speechSynthesis.getVoices().length === 0) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      setVoice();
+      window.speechSynthesis.speak(utterance);
+    };
+  } else {
+    window.speechSynthesis.speak(utterance);
+  }
+
+  return () => {
+    window.speechSynthesis.cancel();
+  };
+}
 
 export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -42,9 +87,19 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [ttsAudioBase64, setTtsAudioBase64] = useState<string | null>(null);
   const [ttsReady, setTtsReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const stopSpeakRef = useRef<(() => void) | null>(null);
+
+  const stopSpeaking = useCallback(() => {
+    stopSpeakRef.current?.();
+    stopSpeakRef.current = null;
+    setStatus("standby");
+  }, []);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
+
+    stopSpeakRef.current?.();
+    stopSpeakRef.current = null;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -133,22 +188,30 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       setCurrentResponse("");
       setStatus("speaking");
 
-      try {
-        const ttsRes = await fetch(`${baseUrl}/api/jarvis/tts`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: fullResponse, voice: "onyx" }),
+      if (Platform.OS === "web" && fullResponse) {
+        const stop = speakWeb(fullResponse, () => {
+          setStatus("standby");
+          stopSpeakRef.current = null;
         });
-        const ttsData = (await ttsRes.json()) as { audio?: string };
-        if (ttsData.audio) {
-          setTtsAudioBase64(ttsData.audio);
-          setTtsReady(true);
+        stopSpeakRef.current = stop;
+      } else {
+        try {
+          const ttsRes = await fetch(`${baseUrl}/api/jarvis/tts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: fullResponse, voice: "onyx" }),
+          });
+          const ttsData = (await ttsRes.json()) as { audio?: string };
+          if (ttsData.audio) {
+            setTtsAudioBase64(ttsData.audio);
+            setTtsReady(true);
+          } else {
+            setStatus("standby");
+          }
+        } catch {
+          setStatus("standby");
         }
-      } catch {
-        /* TTS optional */
       }
-
-      setStatus("standby");
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setStatus("standby");
@@ -165,6 +228,8 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   }, [messages]);
 
   const clearMessages = useCallback(() => {
+    stopSpeakRef.current?.();
+    stopSpeakRef.current = null;
     setMessages([]);
     setCurrentResponse("");
     setStatus("standby");
@@ -173,6 +238,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const clearTts = useCallback(() => {
     setTtsAudioBase64(null);
     setTtsReady(false);
+    setStatus("standby");
   }, []);
 
   return (
@@ -186,6 +252,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         ttsAudioBase64,
         ttsReady,
         clearTts,
+        stopSpeaking,
       }}
     >
       {children}
