@@ -8,6 +8,7 @@ import React, {
 import { fetch } from "expo/fetch";
 import { Platform } from "react-native";
 import * as Speech from "expo-speech";
+import Constants from "expo-constants";
 
 export type Message = {
   id: string;
@@ -37,7 +38,11 @@ type JarvisContextType = {
 
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
-const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+const _domain =
+  process.env["EXPO_PUBLIC_DOMAIN"] ??
+  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
+  "";
+const baseUrl = _domain ? `https://${_domain}` : "";
 const MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [1500, 2500, 4000];
 

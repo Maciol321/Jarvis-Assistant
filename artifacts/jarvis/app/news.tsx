@@ -16,8 +16,14 @@ import { useRouter } from "expo-router";
 import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 
+import Constants from "expo-constants";
+
 const { width: W } = Dimensions.get("window");
-const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+const _domain =
+  process.env["EXPO_PUBLIC_DOMAIN"] ??
+  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
+  "";
+const baseUrl = _domain ? `https://${_domain}` : "";
 
 type NewsItem = {
   title: string;

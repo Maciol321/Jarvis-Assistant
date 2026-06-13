@@ -56,6 +56,9 @@
         }
       ]
     ],
+    "extra": {
+      "apiDomain": "56d5f71b-2e3a-4950-ac2d-e39277306cb5-00-8ica8kx6g3ia.riker.replit.dev"
+    },
     "experiments": {
       "typedRoutes": true
     }

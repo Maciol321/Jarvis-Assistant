@@ -19,13 +19,18 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import Svg, { Defs, Pattern, Path, Rect, Line } from "react-native-svg";
 
+import Constants from "expo-constants";
 import { useColors } from "@/hooks/useColors";
 import { useJarvis } from "@/contexts/JarvisContext";
 import { HUDRing } from "@/components/HUDRing";
 
 const { width: W } = Dimensions.get("window");
 
-const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+const _domain =
+  process.env["EXPO_PUBLIC_DOMAIN"] ??
+  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
+  "";
+const baseUrl = _domain ? `https://${_domain}` : "";
 
 const haptic = (type: "light" | "medium" | "success") => {
   if (Platform.OS === "web") return;
