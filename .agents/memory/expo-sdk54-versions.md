@@ -21,5 +21,14 @@ The installed expo version is 54.0.35. Metro warns about "expected versions" but
 - expo-splash-screen: ~0.30.9
 - expo-status-bar: ~2.2.3
 - react-native-maps: 1.18.0 (FIXED — do not bump without testing Expo Go compatibility)
+- expo-speech: 14.0.8 (native iOS/Android TTS — use `Speech.speak()` with language/pitch/rate/onDone)
 
 **Why:** The expo CLI's "expected version" warnings show SDK 55 versions. Ignore them; the app works fine with these 14.x/15.x versions. Bumping to expected versions would require upgrading expo itself to SDK 55.
+
+**Metro + pnpm symlinks:** If a newly installed expo-* package can't be resolved by Metro ("could not be found"), add to metro.config.js:
+```js
+config.watchFolders = [workspaceRoot];
+config.resolver.nodeModulesPaths = [path.resolve(projectRoot, "node_modules"), path.resolve(workspaceRoot, "node_modules")];
+config.resolver.unstable_enableSymlinks = true;
+```
+This is required because pnpm installs packages as symlinks in `artifacts/jarvis/node_modules` pointing to the virtual store, and Metro doesn't follow them by default.

@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
+import { fetch } from "expo/fetch";
 import { useColors } from "@/hooks/useColors";
 
 const { width: W } = Dimensions.get("window");

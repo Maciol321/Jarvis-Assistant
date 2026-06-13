@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { fetch } from "expo/fetch";
 import { Platform } from "react-native";
+import * as Speech from "expo-speech";
 
 export type Message = {
   id: string;
@@ -204,23 +205,18 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
           stopSpeakRef.current = null;
         });
         stopSpeakRef.current = stop;
+      } else if (fullResponse) {
+        Speech.speak(fullResponse, {
+          language: "pl-PL",
+          pitch: 0.7,
+          rate: 0.88,
+          onDone: () => setStatus("standby"),
+          onError: () => setStatus("standby"),
+          onStopped: () => setStatus("standby"),
+        });
+        stopSpeakRef.current = () => Speech.stop();
       } else {
-        try {
-          const ttsRes = await fetch(`${baseUrl}/api/jarvis/tts`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: fullResponse, voice: "onyx" }),
-          });
-          const ttsData = (await ttsRes.json()) as { audio?: string };
-          if (ttsData.audio) {
-            setTtsAudioBase64(ttsData.audio);
-            setTtsReady(true);
-          } else {
-            setStatus("standby");
-          }
-        } catch {
-          setStatus("standby");
-        }
+        setStatus("standby");
       }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {

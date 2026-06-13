@@ -17,6 +17,7 @@ import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 
 const { width: W } = Dimensions.get("window");
+const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
 
 type NewsItem = {
   title: string;
@@ -32,13 +33,14 @@ type NewsItem = {
 type RssResponse = {
   status: string;
   items?: NewsItem[];
+  error?: string;
 };
 
 const RSS_FEEDS = [
-  { label: "Polska", url: "https://tvn24.pl/polska/rss.xml", color: "#00d4ff" },
-  { label: "Świat", url: "https://tvn24.pl/wiadomosci-ze-swiata/rss.xml", color: "#00ff88" },
-  { label: "Biznes", url: "https://tvn24.pl/biznes-i-tech/rss.xml", color: "#ff8c00" },
-  { label: "Sport", url: "https://tvn24.pl/sport/rss.xml", color: "#ff4488" },
+  { label: "Polska", url: "https://www.polsatnews.pl/rss/polska.xml", color: "#00d4ff" },
+  { label: "Świat", url: "https://www.polsatnews.pl/rss/swiat.xml", color: "#00ff88" },
+  { label: "Biznes", url: "https://www.polsatnews.pl/rss/biznes.xml", color: "#ff8c00" },
+  { label: "Sport", url: "https://www.polsatnews.pl/rss/sport.xml", color: "#ff4488" },
 ];
 
 function GridBg() {
@@ -106,18 +108,18 @@ export default function NewsScreen() {
     setError(null);
     setExpandedId(null);
     try {
-      const feedUrl = encodeURIComponent(RSS_FEEDS[feedIndex]?.url ?? RSS_FEEDS[0]!.url);
+      const feedUrl = RSS_FEEDS[feedIndex]?.url ?? RSS_FEEDS[0]!.url;
       const res = await fetch(
-        `https://api.rss2json.com/v1/api.json?rss_url=${feedUrl}&count=30&api_key=`,
+        `${baseUrl}/api/news/feed?url=${encodeURIComponent(feedUrl)}`,
       );
       const data = (await res.json()) as RssResponse;
-      if (data.status === "ok" && data.items) {
+      if (data.status === "ok" && data.items && data.items.length > 0) {
         setNews(data.items);
       } else {
-        setError("Nie udało się pobrać wiadomości.");
+        setError(data.error ?? "Nie udało się pobrać wiadomości.");
       }
     } catch {
-      setError("Błąd połączenia z serwisem newsów.");
+      setError("Błąd połączenia z serwerem JARVIS.");
     } finally {
       setLoading(false);
     }

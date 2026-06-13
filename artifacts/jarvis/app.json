@@ -15,6 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "com.jarvis.aiassistant",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "JARVIS uses the microphone for voice commands",
         "NSCameraUsageDescription": "JARVIS uses the camera for visual analysis",
