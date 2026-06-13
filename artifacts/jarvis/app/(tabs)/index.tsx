@@ -16,21 +16,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
 import Svg, { Defs, Pattern, Path, Rect, Line } from "react-native-svg";
 
-import Constants from "expo-constants";
 import { useColors } from "@/hooks/useColors";
 import { useJarvis } from "@/contexts/JarvisContext";
 import { HUDRing } from "@/components/HUDRing";
+import { transcribeAudio } from "@/lib/groq";
 
 const { width: W } = Dimensions.get("window");
-
-const _domain =
-  process.env["EXPO_PUBLIC_DOMAIN"] ??
-  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
-  "";
-const baseUrl = _domain ? `https://${_domain}` : "";
 
 const haptic = (type: "light" | "medium" | "success") => {
   if (Platform.OS === "web") return;
@@ -376,16 +369,8 @@ export default function HomeScreen() {
         recordingRef.current = null;
         if (uri) {
           haptic("success");
-          const b64 = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          const res = await fetch(`${baseUrl}/api/jarvis/stt`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ audio: b64 }),
-          });
-          const data = (await res.json()) as { text?: string };
-          if (data.text) await sendMessage(data.text);
+          const text = await transcribeAudio(uri);
+          if (text) await sendMessage(text);
         }
       } catch {
         setIsRecording(false);

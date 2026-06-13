@@ -5,10 +5,9 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { fetch } from "expo/fetch";
 import { Platform } from "react-native";
 import * as Speech from "expo-speech";
-import Constants from "expo-constants";
+import { streamChat, JARVIS_SYSTEM_PROMPT } from "@/lib/groq";
 
 export type Message = {
   id: string;
@@ -38,11 +37,6 @@ type JarvisContextType = {
 
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
-const _domain =
-  process.env["EXPO_PUBLIC_DOMAIN"] ??
-  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
-  "";
-const baseUrl = _domain ? `https://${_domain}` : "";
 const MAX_RETRIES = 3;
 const RETRY_DELAYS_MS = [1500, 2500, 4000];
 
@@ -159,65 +153,11 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const res = await fetch(`${baseUrl}/api/jarvis/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history }),
-          signal,
-        });
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-
-        const reader = res.body?.getReader();
-        if (!reader) throw new Error("No reader");
-        const decoder = new TextDecoder();
-
-        let streamError = "";
         fullResponse = "";
-
-        outer: while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const data = JSON.parse(line.slice(6)) as {
-                content?: string;
-                done?: boolean;
-                error?: string;
-              };
-              if (data.content) {
-                fullResponse += data.content;
-                setCurrentResponse(fullResponse);
-              }
-              if (data.error) {
-                streamError = data.error;
-                break outer;
-              }
-              if (data.done) break outer;
-            } catch {
-              /* skip malformed SSE line */
-            }
-          }
+        for await (const chunk of streamChat(history, JARVIS_SYSTEM_PROMPT, signal)) {
+          fullResponse += chunk;
+          setCurrentResponse(fullResponse);
         }
-
-        if (streamError) {
-          const errMsg: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: streamError,
-            timestamp: Date.now(),
-          };
-          setMessages((prev) => [...prev, errMsg]);
-          setCurrentResponse("");
-          setStatus("standby");
-          return;
-        }
-
         lastError = null;
         break;
       } catch (err) {

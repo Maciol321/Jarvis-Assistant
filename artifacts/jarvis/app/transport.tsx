@@ -15,16 +15,43 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
-import { fetch } from "expo/fetch";
-import Constants from "expo-constants";
 import { useColors } from "@/hooks/useColors";
+import { chatOnce, streamChat } from "@/lib/groq";
 
 const { width: W } = Dimensions.get("window");
-const _domain =
-  process.env["EXPO_PUBLIC_DOMAIN"] ??
-  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
-  "";
-const baseUrl = _domain ? `https://${_domain}` : "";
+
+const STATIONS = [
+  { id: 1, name: "Warszawa Centralna", slug: "warszawa-centralna" },
+  { id: 2, name: "Warszawa Wschodnia", slug: "warszawa-wschodnia" },
+  { id: 3, name: "Warszawa Zachodnia", slug: "warszawa-zachodnia" },
+  { id: 4, name: "Kraków Główny", slug: "krakow-glowny" },
+  { id: 5, name: "Gdańsk Główny", slug: "gdansk-glowny" },
+  { id: 6, name: "Wrocław Główny", slug: "wroclaw-glowny" },
+  { id: 7, name: "Poznań Główny", slug: "poznan-glowny" },
+  { id: 8, name: "Łódź Fabryczna", slug: "lodz-fabryczna" },
+  { id: 9, name: "Katowice", slug: "katowice" },
+  { id: 10, name: "Gdynia Główna", slug: "gdynia-glowna" },
+  { id: 11, name: "Szczecin Główny", slug: "szczecin-glowny" },
+  { id: 12, name: "Lublin", slug: "lublin" },
+  { id: 13, name: "Rzeszów Główny", slug: "rzeszow-glowny" },
+  { id: 14, name: "Białystok", slug: "bialystok" },
+  { id: 15, name: "Bydgoszcz Główna", slug: "bydgoszcz-glowna" },
+  { id: 16, name: "Toruń Główny", slug: "torun-glowny" },
+  { id: 17, name: "Olsztyn Główny", slug: "olsztyn-glowny" },
+  { id: 18, name: "Kielce", slug: "kielce" },
+  { id: 19, name: "Opole Główne", slug: "opole-glowne" },
+  { id: 20, name: "Zielona Góra Główna", slug: "zielona-gora-glowna" },
+  { id: 21, name: "Radom", slug: "radom" },
+  { id: 22, name: "Częstochowa", slug: "czestochowa" },
+  { id: 23, name: "Sosnowiec Główny", slug: "sosnowiec-glowny" },
+  { id: 24, name: "Gliwice", slug: "gliwice" },
+  { id: 25, name: "Zakopane", slug: "zakopane" },
+  { id: 26, name: "Nowy Sącz", slug: "nowy-sacz" },
+  { id: 27, name: "Przemyśl Główny", slug: "przemysl-glowny" },
+  { id: 28, name: "Zamość", slug: "zamosc" },
+  { id: 29, name: "Gniezno", slug: "gniezno" },
+  { id: 30, name: "Legnica", slug: "legnica" },
+];
 
 type Station = { id: number; name: string; slug: string };
 
@@ -81,18 +108,14 @@ function StationPicker({
     setQuery(q);
     if (debounce.current) clearTimeout(debounce.current);
     if (q.length < 2) { setResults([]); return; }
-    debounce.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const r = await fetch(`${baseUrl}/api/transport/stations?q=${encodeURIComponent(q)}`);
-        const data = (await r.json()) as Station[];
-        setResults(Array.isArray(data) ? data.slice(0, 8) : []);
-      } catch {
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 350);
+    debounce.current = setTimeout(() => {
+      const qLow = q.toLowerCase();
+      const qSlug = qLow.replace(/\s+/g, "-");
+      const data = STATIONS.filter(
+        (s) => s.name.toLowerCase().includes(qLow) || s.slug.includes(qSlug),
+      ).slice(0, 8);
+      setResults(data);
+    }, 200);
   };
 
   const pick = (s: Station) => {
@@ -359,18 +382,44 @@ export default function TransportScreen() {
     setConnections([]);
     setSearched(true);
     try {
-      const url = `${baseUrl}/api/transport/connections?from=${encodeURIComponent(fromStation.slug)}&to=${encodeURIComponent(toStation.slug)}&date=${date}`;
-      const r = await fetch(url);
-      const data = await r.json() as { train_suggestions?: Connection[]; connections?: Connection[] } | Connection[];
-      const list = Array.isArray(data)
-        ? data
-        : (data as { train_suggestions?: Connection[]; connections?: Connection[] }).train_suggestions
-          ?? (data as { connections?: Connection[] }).connections
-          ?? [];
+      const fromName = fromStation.name;
+      const toName = toStation.name;
+      const prompt = `Jesteś bazą danych rozkładów jazdy PKP. Podaj realistyczny rozkład pociągów na trasie "${fromName}" → "${toName}" w dniu ${date}.
+
+Odpowiedz WYŁĄCZNIE w formacie JSON (bez żadnego dodatkowego tekstu, bez markdown, bez komentarzy).
+Zwróć tablicę od 6 do 10 połączeń. Każde połączenie ma format:
+{
+  "departure_time": "HH:MM",
+  "arrival_time": "HH:MM",
+  "duration": "H:MM",
+  "changes": 0,
+  "price": 89,
+  "sections": [{
+    "train_full_name": "IC 1234 NAZWA",
+    "brand": "IC",
+    "departure": "HH:MM",
+    "arrival": "HH:MM",
+    "from": { "name": "${fromName}", "platform": "1" },
+    "to": { "name": "${toName}", "platform": "2" }
+  }]
+}
+
+Używaj REALISTYCZNYCH godzin PKP: EIP (Express InterCity Premium), EIC (Express InterCity), IC (InterCity), TLK (TLK), REG (regionalne).
+Godziny muszą być spójne matematycznie. Ceny: IC ok 59-129 zł, EIC 79-159 zł, EIP 99-199 zł, TLK 29-79 zł.`;
+
+      const raw = await chatOnce([{ role: "user", content: prompt }], "", 2000, true);
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { throw new Error("Błąd parsowania odpowiedzi AI."); }
+      const list = Array.isArray(parsed)
+        ? parsed
+        : (parsed as Record<string, unknown>).connections ??
+          (parsed as Record<string, unknown>).train_suggestions ??
+          (parsed as Record<string, unknown>).results ??
+          [];
       setConnections(list as Connection[]);
       if ((list as Connection[]).length === 0) setError("Brak połączeń na wybrany dzień.");
-    } catch {
-      setError("Błąd pobierania rozkładu. Sprawdź połączenie.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Błąd pobierania rozkładu.");
     } finally {
       setLoading(false);
     }
@@ -384,33 +433,17 @@ export default function TransportScreen() {
     setChatLoading(true);
     let fullResponse = "";
     try {
-      const res = await fetch(`${baseUrl}/api/jarvis/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{
-            role: "user" as const,
-            content: `[Pytanie o transport publiczny w Polsce. Podaj konkretne informacje o rozkładach komunikacji miejskiej, tramwajach, autobusach. Jeśli nie masz dokładnych danych, podaj szacunkowe godziny i zasugeruj sprawdzenie oficjalnych źródeł dla danego miasta.]\n${q}`,
-          }],
-        }),
-      });
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error();
-      const dec = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const line of dec.decode(value).split("\n")) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const d = JSON.parse(line.slice(6)) as { content?: string };
-            if (d.content) fullResponse += d.content;
-          } catch { /* */ }
-        }
+      const systemPrompt = "Jesteś asystentem transportowym JARVIS. Pomagasz z rozkładami komunikacji miejskiej i kolejowej w Polsce — tramwajami, autobusami, metrem, pociągami. Odpowiadaj po polsku, konkretnie i pomocnie. Jeśli nie masz dokładnych danych, podaj szacunkowe godziny i zasugeruj sprawdzenie oficjalnych źródeł.";
+      for await (const chunk of streamChat(
+        [{ role: "user", content: q.trim() }],
+        systemPrompt,
+      )) {
+        fullResponse += chunk;
       }
       setChatMessages((p) => [...p, { role: "jarvis" as const, content: fullResponse || "Przepraszam, spróbuj ponownie." }]);
-    } catch {
-      setChatMessages((p) => [...p, { role: "jarvis" as const, content: "Błąd połączenia." }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Błąd połączenia.";
+      setChatMessages((p) => [...p, { role: "jarvis" as const, content: msg }]);
     } finally {
       setChatLoading(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

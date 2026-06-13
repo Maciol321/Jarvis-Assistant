@@ -15,15 +15,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import Svg, { Defs, Pattern, Path, Rect } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
-
-import Constants from "expo-constants";
+import { fetchRss } from "@/lib/rssParser";
 
 const { width: W } = Dimensions.get("window");
-const _domain =
-  process.env["EXPO_PUBLIC_DOMAIN"] ??
-  (Constants.expoConfig?.extra?.apiDomain as string | undefined) ??
-  "";
-const baseUrl = _domain ? `https://${_domain}` : "";
 
 type NewsItem = {
   title: string;
@@ -34,12 +28,6 @@ type NewsItem = {
   author?: string;
   thumbnail?: string;
   enclosure?: { link?: string; url?: string };
-};
-
-type RssResponse = {
-  status: string;
-  items?: NewsItem[];
-  error?: string;
 };
 
 const RSS_FEEDS = [
@@ -115,17 +103,14 @@ export default function NewsScreen() {
     setExpandedId(null);
     try {
       const feedUrl = RSS_FEEDS[feedIndex]?.url ?? RSS_FEEDS[0]!.url;
-      const res = await fetch(
-        `${baseUrl}/api/news/feed?url=${encodeURIComponent(feedUrl)}`,
-      );
-      const data = (await res.json()) as RssResponse;
-      if (data.status === "ok" && data.items && data.items.length > 0) {
-        setNews(data.items);
+      const items = await fetchRss(feedUrl);
+      if (items.length > 0) {
+        setNews(items as NewsItem[]);
       } else {
-        setError(data.error ?? "Nie udało się pobrać wiadomości.");
+        setError("Brak wiadomości w tym kanale.");
       }
     } catch {
-      setError("Błąd połączenia z serwerem JARVIS.");
+      setError("Nie udało się pobrać wiadomości. Sprawdź połączenie.");
     } finally {
       setLoading(false);
     }
