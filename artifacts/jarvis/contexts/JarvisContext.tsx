@@ -38,6 +38,8 @@ type JarvisContextType = {
 const JarvisContext = createContext<JarvisContextType | null>(null);
 
 const baseUrl = `https://${process.env["EXPO_PUBLIC_DOMAIN"]}`;
+const MAX_RETRIES = 3;
+const RETRY_DELAYS_MS = [1500, 2500, 4000];
 
 function pickMaleVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
@@ -87,6 +89,10 @@ function speakWeb(text: string, onEnd: () => void): () => void {
   return () => window.speechSynthesis.cancel();
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<JarvisStatus>("standby");
@@ -132,104 +138,131 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
     abortRef.current?.abort();
     abortRef.current = new AbortController();
+    const signal = abortRef.current.signal;
 
     let fullResponse = "";
-    let streamError = "";
+    let lastError: unknown = null;
 
-    try {
-      const res = await fetch(`${baseUrl}/api/jarvis/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
-        signal: abortRef.current.signal,
-      });
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (signal.aborted) return;
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No reader");
-      const decoder = new TextDecoder();
+      if (attempt > 0) {
+        setCurrentResponse(`⟳ Łączę z JARVIS... (próba ${attempt + 1}/${MAX_RETRIES})`);
+        await sleep(RETRY_DELAYS_MS[attempt - 1] ?? 2000);
+        if (signal.aborted) return;
+        setCurrentResponse("");
+      }
 
-      outer: while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const data = JSON.parse(line.slice(6)) as {
-              content?: string;
-              done?: boolean;
-              error?: string;
-            };
-            if (data.content) {
-              fullResponse += data.content;
-              setCurrentResponse(fullResponse);
+      try {
+        const res = await fetch(`${baseUrl}/api/jarvis/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: history }),
+          signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No reader");
+        const decoder = new TextDecoder();
+
+        let streamError = "";
+        fullResponse = "";
+
+        outer: while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6)) as {
+                content?: string;
+                done?: boolean;
+                error?: string;
+              };
+              if (data.content) {
+                fullResponse += data.content;
+                setCurrentResponse(fullResponse);
+              }
+              if (data.error) {
+                streamError = data.error;
+                break outer;
+              }
+              if (data.done) break outer;
+            } catch {
+              /* skip malformed SSE line */
             }
-            if (data.error) {
-              streamError = data.error;
-              break outer;
-            }
-            if (data.done) break outer;
-          } catch {
-            /* skip */
           }
         }
-      }
 
-      if (streamError) {
-        const errMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: streamError,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errMsg]);
-        setCurrentResponse("");
-        setStatus("standby");
-        return;
-      }
+        if (streamError) {
+          const errMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            content: streamError,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, errMsg]);
+          setCurrentResponse("");
+          setStatus("standby");
+          return;
+        }
 
-      const assistantMsg: Message = {
+        lastError = null;
+        break;
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        lastError = err;
+        fullResponse = "";
+      }
+    }
+
+    if (lastError !== null) {
+      setStatus("standby");
+      setCurrentResponse("");
+      const errMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: fullResponse,
+        content: "Nie mogę teraz połączyć się z serwerem JARVIS. Sprawdź połączenie i spróbuj ponownie.",
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, assistantMsg]);
-      setCurrentResponse("");
-      setStatus("speaking");
+      setMessages((prev) => [...prev, errMsg]);
+      return;
+    }
 
-      if (Platform.OS === "web" && fullResponse) {
-        const stop = speakWeb(fullResponse, () => {
-          setStatus("standby");
-          stopSpeakRef.current = null;
-        });
-        stopSpeakRef.current = stop;
-      } else if (fullResponse) {
-        Speech.speak(fullResponse, {
-          language: "pl-PL",
-          pitch: 0.7,
-          rate: 0.88,
-          onDone: () => setStatus("standby"),
-          onError: () => setStatus("standby"),
-          onStopped: () => setStatus("standby"),
-        });
-        stopSpeakRef.current = () => Speech.stop();
-      } else {
+    const assistantMsg: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: fullResponse,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+    setCurrentResponse("");
+    setStatus("speaking");
+
+    if (Platform.OS === "web" && fullResponse) {
+      const stop = speakWeb(fullResponse, () => {
         setStatus("standby");
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        setStatus("standby");
-        const errMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "Błąd połączenia z systemem JARVIS. Sprawdź połączenie internetowe.",
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errMsg]);
-        setCurrentResponse("");
-      }
+        stopSpeakRef.current = null;
+      });
+      stopSpeakRef.current = stop;
+    } else if (fullResponse) {
+      Speech.speak(fullResponse, {
+        language: "pl-PL",
+        pitch: 0.7,
+        rate: 0.88,
+        onDone: () => setStatus("standby"),
+        onError: () => setStatus("standby"),
+        onStopped: () => setStatus("standby"),
+      });
+      stopSpeakRef.current = () => Speech.stop();
+    } else {
+      setStatus("standby");
     }
   }, [messages]);
 
